@@ -1,6 +1,48 @@
+import numpy as np
+import cairocffi as cairo
+import torch
+from matplotlib import pyplot
+import matplotlib
+import tqdm
+import glob
+import os
+import lxml.etree
+import h5py
+
+
+def process_set(theset, iam_dir):
+    blacklist = {"a08-551z-08","a08-551z-09"} # these seem broken
+    txts = {}
+    for i,n in enumerate(theset):
+        txtfn = iam_dir+"/ascii/{}/{}/{}.txt".format(n[:3], n[:7], n)
+        for j,t in enumerate(open(txtfn).read().split("CSR:")[1].strip().split("\n")):
+            txts['{}-{:02d}'.format(n,j+1)] = t
+    samples = {}
+    for i,n in tqdm.tqdm(enumerate(theset),total=len(theset)):
+        globmask = iam_dir+"/lineStrokes/{}/{}/{}-*.xml".format(n[:3], n[:7], n)
+        for fn in glob.glob(globmask):
+            key = (os.path.splitext(os.path.basename(fn))[0])
+            if key not in blacklist:
+                root = lxml.etree.parse(fn).getroot()
+                strokes_list = []
+                for s in root.find("StrokeSet").findall("Stroke"):
+                    pts = torch.FloatTensor([(float(p.attrib['x']), float(p.attrib['y']),0.0) for p in s.findall("Point")])
+                    pts[-1,-1] = 1
+                    strokes_list.append(pts)
+                strokes = torch.cat(strokes_list, dim=0)
+                (min_x,min_y),_ = torch.min(strokes[:,:2],dim=0)
+                (max_x,max_y),_ = torch.max(strokes[:,:2],dim=0)
+                rel_strokes = torch.cat([torch.zeros(1,3),
+                                         torch.cat([strokes[1:,:2]-strokes[:-1,:2],strokes[1:,2:]],dim=1)], dim=0)
+                if rel_strokes.abs().max()<1000: # we assume that such large moves are broken
+                    samples[key] = {"strokes":strokes_list, "minmax":(min_x,min_y,max_x,max_y), "rel_strokes":rel_strokes,
+                                    "txt": txts[key]}
+    return samples
+
 def show_stroke(x, colors=None):   
     x= x[:(torch.arange(0,x.size(0))[x[:,2]>-0.0001].size(0))] # only used bits
-    stroke = (x[:,:2]*train_ds.coord_std.unsqueeze(0)+train_ds.coord_mean.unsqueeze(0)).cumsum(0)
+    #stroke = (x[:,:2]*train_ds.coord_std.unsqueeze(0)+train_ds.coord_mean.unsqueeze(0)).cumsum(0)
+    stroke = (x[:,:2]).cumsum(0)
     stroke[:,1] *= -1
     pen = x[:,2]
     xmin,ymin = stroke.min(0)[0]
@@ -34,7 +76,8 @@ def show_stroke(x, colors=None):
 
 
 def stroke_to_image(x, target_size = (1280,64), randomize=False):
-    stroke = (x[:,:2]*train_ds.coord_std.unsqueeze(0)+train_ds.coord_mean.unsqueeze(0)).cumsum(0)
+    #stroke = (x[:,:2]*train_ds.coord_std.unsqueeze(0)+train_ds.coord_mean.unsqueeze(0)).cumsum(0)
+    stroke = (x[:,:2]).cumsum(0)
     pen = x[:,2]
     if randomize:
         shear_prob = 0.5
@@ -103,9 +146,20 @@ def stroke_to_image(x, target_size = (1280,64), randomize=False):
     ctx.stroke ()
 
     buf = surface.get_data()
-    data = numpy.ndarray(shape=(imheight, (imwidth+3)//4*4),#(WIDTH+7)//8),
-                         dtype=numpy.uint8,
+    data = np.ndarray(shape=(imheight, (imwidth+3)//4*4),#(WIDTH+7)//8),
+                         dtype=np.uint8,
                          buffer=buf)[:,:imwidth]
     data = 1-(data>0)
     data = torch.FloatTensor(data)
     return data
+
+
+def save_to_hdf5(fn, d):
+    f = h5py.File(fn, "w")
+    for k,v in d.items():
+        f.create_dataset(k, data=v)
+
+def load_from_hdf5(fn):
+    f = h5py.File(fn, "r")
+    print (list(f.keys()))
+    return {k:v[:] for k,v in f.items()}

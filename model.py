@@ -185,7 +185,7 @@ class HandwritingModel(torch.nn.Module):
     def forward(self, seq_pt, seq_mask, seq_pt_target, c, c_mask,
                 h_ini=None, k_ini=None, w_ini=None, hidden_dict=None):       
         batch_size = seq_pt.size(1)
-        atensor = next(m.parameters())
+        atensor = next(self.parameters())
         
         #if h_ini is None:
         #    h_ini = self.mixture.linear.weight.data.new(batch_size, self.n_hidden).zero_()
@@ -233,7 +233,7 @@ class HandwritingModel(torch.nn.Module):
         # h_ini: (batch_size, n_hidden), k_ini: (batch_size, n_mixture_attention), w_ini: (batch_size, n_chars)
         # bias: float    The bias that controls the variance of the generation
         # n_steps: int   The maximal number of generation steps.
-        atensor = next(m.parameters())
+        atensor = next(self.parameters())
         bias = bias*torch.ones((),device=atensor.get_device(), dtype=atensor.dtype)
         batch_size = pt_ini.size(0)
         if k_ini is None:
