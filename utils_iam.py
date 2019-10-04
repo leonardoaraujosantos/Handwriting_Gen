@@ -39,10 +39,10 @@ def process_set(theset, iam_dir):
                                     "txt": txts[key]}
     return samples
 
-def show_stroke(x, colors=None):   
+def show_stroke(x, train_ds, colors=None):   
     x= x[:(torch.arange(0,x.size(0))[x[:,2]>-0.0001].size(0))] # only used bits
-    #stroke = (x[:,:2]*train_ds.coord_std.unsqueeze(0)+train_ds.coord_mean.unsqueeze(0)).cumsum(0)
-    stroke = (x[:,:2]).cumsum(0)
+    stroke = (x[:,:2]*train_ds.coord_std.unsqueeze(0)+train_ds.coord_mean.unsqueeze(0)).cumsum(0)
+    #stroke = (x[:,:2]).cumsum(0)
     stroke[:,1] *= -1
     pen = x[:,2]
     xmin,ymin = stroke.min(0)[0]
@@ -75,9 +75,9 @@ def show_stroke(x, colors=None):
             curpos = pos
 
 
-def stroke_to_image(x, target_size = (1280,64), randomize=False):
-    #stroke = (x[:,:2]*train_ds.coord_std.unsqueeze(0)+train_ds.coord_mean.unsqueeze(0)).cumsum(0)
-    stroke = (x[:,:2]).cumsum(0)
+def stroke_to_image(x, train_ds, target_size = (1280,64), randomize=False):
+    stroke = (x[:,:2]*train_ds.coord_std.unsqueeze(0)+train_ds.coord_mean.unsqueeze(0)).cumsum(0)
+    #stroke = (x[:,:2]).cumsum(0)
     pen = x[:,2]
     if randomize:
         shear_prob = 0.5
